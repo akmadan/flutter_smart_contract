@@ -1,115 +1,141 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart';
+import 'package:web3dart/web3dart.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(new MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      // theme: ThemeData.dark(),
+      debugShowCheckedModeBanner: false,
+      home: Home(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class Home extends StatefulWidget {
+  const Home({Key? key}) : super(key: key);
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _HomeState createState() => _HomeState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomeState extends State<Home> {
+  Client? httpClient;
+  Web3Client? ethClient;
+  final address = '0x75936a0c47FeCEf2367BF8d16901C0B9A9c432b2';
+  var myData;
+  TextEditingController controller = TextEditingController();
+  @override
+  void initState() {
+    httpClient = Client(); //initializing httpClient
+    ethClient = Web3Client(
+        //initializing Web3Client
+        "https://kovan.infura.io/v3/8a93b1337c3f41f5b7a743f4800e1438",
+        httpClient!);
 
-  void _incrementCounter() {
+    /// get url from infura
+    getBalance();
+    super.initState();
+  }
+
+  Future<DeployedContract> loadContract() async {
+    String abi = await rootBundle.loadString('assets/abi.json');
+    String contractAddresss = '0x8807295CcB5C96E35f4C564b8cd7c0F8dA16253d';
+    final contract = DeployedContract(ContractAbi.fromJson(abi, 'cheemsCoin'),
+        EthereumAddress.fromHex(contractAddresss));
+    return contract; //returning contract to query()
+  }
+
+  Future<List<dynamic>> query(String funcName, List<dynamic> args) async {
+    final contract = await loadContract();
+    final ethFunction = contract.function(funcName);
+    final result = ethClient!
+        .call(contract: contract, function: ethFunction, params: args);
+    return result;
+  }
+
+  Future<void> getBalance() async {
+    // EthereumAddress address = EthereumAddress.fromHex(targetAddress);
+    List<dynamic> result = await query('getBalance', []);
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      myData = result[0];
     });
+  }
+
+  Future<String> submit(String funcName, List<dynamic> args) async {
+    EthPrivateKey credentails = EthPrivateKey.fromHex("_____privateKey_____");
+    DeployedContract contract = await loadContract();
+    final ethFunction = contract.function(funcName);
+    final result = await ethClient!.sendTransaction(
+        credentails,
+        Transaction.callContract(
+            contract: contract, function: ethFunction, parameters: args),
+        chainId: null,
+        fetchChainIdFromNetworkId: true);
+    return result;
+  }
+
+  Future<String> depositCoin() async {
+    var bigAmt = BigInt.from(int.parse(controller.text));
+    var response = await submit("deposit", [bigAmt]);
+    print('deposited');
+    return response;
+  }
+
+  Future<String> withdrawCoin() async {
+    var bigAmt = BigInt.from(int.parse(controller.text));
+    var response = await submit("withdraw", [bigAmt]);
+    print('withdrawn');
+    return response;
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: Text('CheemsCoin'),
       ),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Balance: ' + myData.toString() + ' CC',
+                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+              ),
+              TextField(
+                controller: controller,
+              ),
+              TextButton.icon(
+                  onPressed: () {
+                    getBalance();
+                  },
+                  icon: Icon(Icons.refresh),
+                  label: Text('Refresh')),
+              TextButton.icon(
+                  onPressed: () {
+                    depositCoin();
+                  },
+                  icon: Icon(Icons.add),
+                  label: Text('Deposit')),
+              TextButton.icon(
+                  onPressed: () {
+                    withdrawCoin();
+                  },
+                  icon: Icon(Icons.arrow_back),
+                  label: Text('Withdraw')),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
